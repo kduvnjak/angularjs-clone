@@ -832,14 +832,111 @@ describe('Scope', function () {
             expect(counter).toBe(1);
         });
 
-        it('does not call the zero-watch listener when deregistered first', function() {
+        it('does not call the zero-watch listener when deregistered first', function () {
             var counter = 0;
-            var destroyGroup = scope.$watchGroup([], function(newValues, oldValues, scope) {
+            var destroyGroup = scope.$watchGroup([], function (newValues, oldValues, scope) {
                 counter++;
             });
             destroyGroup();
             scope.$digest();
             expect(counter).toEqual(0);
+        });
+    });
+
+    describe('inheritance', function () {
+        it('inherits the parents properties', function () {
+            var parent = new Scope();
+            parent.aValue = [1, 2, 3];
+
+            var child = parent.$new();
+            expect(child.aValue).toEqual([1, 2, 3]);
+        });
+
+        it('does not cause the parent to inherits its properites', function () {
+            var parent = new Scope();
+            var child = parent.$new();
+
+            child.aValue = [1, 2, 3];
+            expect(parent.aValue).toBeUndefined();
+        });
+
+        it('inherits the parent properties wherever they are defined', function () {
+            var parent = new Scope();
+            var child = parent.$new();
+            parent.aValue = [1, 2, 3];
+
+            expect(child.aValue).toEqual([1, 2, 3]);
+        });
+
+        it('can manipulate parent properties scopes property', function () {
+            var parent = new Scope();
+            parent.aValue = [1, 2, 3];
+            var child = parent.$new();
+
+            child.aValue.push(4);
+            expect(parent.aValue).toEqual([1, 2, 3, 4]);
+            expect(child.aValue).toEqual([1, 2, 3, 4]);
+        });
+
+        it('can watch a property in a parent', function () {
+            var parent = new Scope();
+            var child = parent.$new();
+            parent.aValue = [1, 2, 3];
+            child.counter = 0;
+
+            child.$watch(function (scope) {
+                return scope.aValue;
+            }, function (newValue, oldValue, scope) {
+                scope.counter++;
+            }, true);
+
+            child.$digest();
+            expect(child.counter).toBe(1);
+
+            parent.aValue.push(4);
+            child.$digest();
+            expect(child.counter).toBe(2);
+        });
+
+        it('can be nested at any depth', function () {
+            var a = new Scope();
+            var aa = a.$new();
+            var aaa = aa.$new();
+            var aab = aa.$new();
+            var ab = a.$new();
+            var abb = ab.$new();
+            a.value = 1;
+            expect(aa.value).toBe(1);
+            expect(aaa.value).toBe(1);
+            expect(aab.value).toBe(1);
+            expect(ab.value).toBe(1);
+            expect(abb.value).toBe(1);
+            ab.anotherValue = 2;
+            expect(abb.anotherValue).toBe(2);
+            expect(aa.anotherValue).toBeUndefined();
+            expect(aaa.anotherValue).toBeUndefined();
+        });
+
+        it ('shadows the parent property with the same name', function () {
+           var parent = new Scope();
+            var child = parent.$new();
+
+            parent.name = 'Joe';
+            child.name = 'Jill';
+
+            expect(parent.name).toBe('Joe');
+            expect(child.name).toBe('Jill');
+        });
+
+        it('does not shadows members of parents attributes', function () {
+           var parent = new Scope();
+            var child = parent.$new();
+
+            parent.user = {name : 'Joe'};
+            child.user.name = 'Jill';
+
+            expect(parent.user.name).toBe('Jill');
+            expect(child.user.name).toBe('Jill');
         });
     });
 });
