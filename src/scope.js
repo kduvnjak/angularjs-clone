@@ -27,13 +27,13 @@ Scope.prototype.$watch = function (watchFn, listenerFn, valueEq) {
         valueEq: !!valueEq
     };
     this.$$watchers.unshift(watcher);
-    this.$$lastDirtyWatch = null;
+    this.$root.$$lastDirtyWatch = null;
 
     return function () {
         var index = self.$$watchers.indexOf(watcher);
         if (index >= 0) {
             self.$$watchers.splice(index, 1);
-            self.$$lastDirtyWatch = null;
+            self.$root.$$lastDirtyWatch = null;
         }
     };
 };
@@ -50,11 +50,11 @@ Scope.prototype.$$digestOnce = function () {
                     newValue = watcher.watchFn(scope);
                     oldValue = watcher.last;
                     if (!scope.$$areEqual(newValue, oldValue, watcher.valueEq)) {
-                        self.$$lastDirtyWatch = watcher;
+                        self.$root.$$lastDirtyWatch = watcher;
                         watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
                         watcher.listenerFn(newValue, (oldValue === initWatchVal ? newValue : oldValue), scope);
                         dirty = true;
-                    } else if (self.$$lastDirtyWatch === watcher) {
+                    } else if (self.$root.$$lastDirtyWatch === watcher) {
                         continueLoop = false;
                         return false;
                     }
@@ -79,11 +79,11 @@ Scope.prototype.$$areEqual = function (newValue, oldValue, valueEq) {
 Scope.prototype.$digest = function () {
     var ttl = 10;
     var dirty;
-    this.$$lastDirtyWatch = null;
+    this.$root.$$lastDirtyWatch = null;
     this.$beginPhase('$digest');
 
-    if (this.$$applyAsyncId) {
-        clearTimeout(this.$$applyAsyncId);
+    if (this.$root.$$applyAsyncId) {
+        clearTimeout(this.$root.$$applyAsyncId);
         this.$$flushApplyAsync();
     }
 
@@ -122,7 +122,7 @@ Scope.prototype.$evalAsync = function (expr) {
     if (!self.$$phase && !self.$$asyncQueue.length) {
         setTimeout(function () {
             if (self.$$asyncQueue.length) {
-                self.$digest();
+                self.$root.$digest();
             }
         }, 0);
     }
@@ -155,8 +155,8 @@ Scope.prototype.$applyAsync = function (expr) {
     self.$$applyAsyncQueue.push(function () {
         self.$eval(expr);
     });
-    if (self.$$applyAsyncId === null) {
-        self.$$applyAsyncId = setTimeout(function () {
+    if (self.$root.$$applyAsyncId === null) {
+        self.$root.$$applyAsyncId = setTimeout(function () {
             self.$apply(_.bind(self.$$flushApplyAsync, self));
         });
     }
@@ -170,7 +170,7 @@ Scope.prototype.$$flushApplyAsync = function () {
             console.error(e);
         }
     }
-    this.$$applyAsyncId = null;
+    this.$root.$$applyAsyncId = null;
 };
 
 Scope.prototype.$$postDigest = function (fn) {
@@ -224,15 +224,25 @@ Scope.prototype.$watchGroup = function (watchFns, listenerFn) {
     };
 };
 
-Scope.prototype.$new = function () {
-    var ChildScope = function () {
-    };
-
-    ChildScope.prototype = this;
-    var child = new ChildScope();
-    this.$$children.push(child);
+Scope.prototype.$new = function (isolated, parent) {
+    var child;
+    parent = parent || this;
+    if (isolated) {
+        child = new Scope();
+        child.$root = parent.$root;
+        child.$$asyncQueue = parent.$$asyncQueue;
+        child.$$postDigestQueue = parent.$$postDigestQueue;
+        child.$$applyAsyncQueue = parent.$$applyAsyncQueue;
+    } else {
+        var ChildScope = function () {
+        };
+        ChildScope.prototype = this;
+        child = new ChildScope();
+    }
+    parent.$$children.push(child);
     child.$$watchers = [];
     child.$$children = [];
+    child.$parent = parent;
     return child;
 };
 
@@ -244,7 +254,17 @@ Scope.prototype.$$everyScope = function (fn) {
     } else {
         return false;
     }
+};
 
+Scope.prototype.$destroy = function () {
+  if (this.$parent) {
+      var siblings = this.$parent.$$children;
+      var indexOfThis = siblings.indexOf(this);
+      if (indexOfThis > 0) {
+          siblings.splice(indexOfThis, 1);
+      }
+      this.$$watchers = null;
+  }
 }
 
 module.exports = Scope;
