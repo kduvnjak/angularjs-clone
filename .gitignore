@@ -1,4 +1,4 @@
-# Idea files
+# Idea files to ignore
 *.iml
 # node modules files
 node_modules/
