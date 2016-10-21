@@ -2,8 +2,10 @@
 
 var _ = require('lodash');
 
-var ESCAPES = {'n':'\n', 'f':'\f', 'r':'\r', 't':'\t',
-    'v':'\v', '\'':'\'', '"':'"'};
+var ESCAPES = {
+    'n': '\n', 'f': '\f', 'r': '\r', 't': '\t',
+    'v': '\v', '\'': '\'', '"': '"'
+};
 
 function parse(expr) {
     var lexer = new Lexer();
@@ -12,7 +14,6 @@ function parse(expr) {
 }
 
 function Lexer() {
-
 }
 
 Lexer.prototype.lex = function (text) {
@@ -28,6 +29,9 @@ Lexer.prototype.lex = function (text) {
         }
         else if (this.ch === '\'' || this.ch === '"') {
             this.readString(this.ch);
+        }
+        else if (this.isIdent(this.ch)) {
+            this.readIdent();
         }
         else {
             throw 'Unexpected next character ' + this.ch;
@@ -73,7 +77,7 @@ Lexer.prototype.readNumber = function () {
     });
 };
 
-Lexer.prototype.readString = function(quote) {
+Lexer.prototype.readString = function (quote) {
     this.index++;
     var string = '';
     var escape = false;
@@ -117,6 +121,26 @@ Lexer.prototype.peek = function () {
     return this.index < this.text.length - 1 ? this.text.charAt(this.index + 1) : false;
 };
 
+Lexer.prototype.isIdent = function (ch) {
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_' || ch === '$';
+};
+
+Lexer.prototype.readIdent = function () {
+    var text = '';
+    while (this.index < this.text.length) {
+        var ch = this.text.charAt(this.index);
+        if (this.isIdent(ch) || this.isNumber(ch)) {
+            text += ch;
+        } else {
+            break;
+        }
+        this.index++;
+    }
+    this.tokens.push({
+        text: text
+    });
+};
+
 function AST(lexer) {
     this.lexer = lexer;
 }
@@ -130,12 +154,26 @@ AST.prototype.ast = function (text) {
 };
 
 AST.prototype.program = function () {
-    return {type: AST.Program, body: this.constant()};
+    return {type: AST.Program, body: this.primary()};
+};
+
+AST.prototype.primary = function () {
+    if (this.constants.hasOwnProperty(this.tokens[0].text)) {
+        return this.constants[this.tokens[0].text];
+    } else {
+        return this.constant();
+    }
 };
 
 AST.prototype.constant = function () {
     return {type: AST.Literal, value: this.tokens[0].value};
 };
+
+AST.prototype.constants = {
+    'null': {type: AST.Literal, value: null},
+    'true': {type: AST.Literal, value: true},
+    'false': {type: AST.Literal, value: false}
+}
 
 function ASTCompiler(astBuilder) {
     this.astBuilder = astBuilder;
@@ -165,6 +203,8 @@ ASTCompiler.prototype.escape = function(value) {
         return '\'' +
             value.replace(this.stringEscapeRegex, this.stringEscapeFn) +
             '\'';
+    } else if (_.isNull(value)) {
+        return 'null';
     } else {
         return value;
     }
@@ -172,7 +212,7 @@ ASTCompiler.prototype.escape = function(value) {
 
 ASTCompiler.prototype.stringEscapeRegex = /[^ a-zA-Z0-9]/g;
 
-ASTCompiler.prototype.stringEscapeFn = function(c) {
+ASTCompiler.prototype.stringEscapeFn = function (c) {
     return '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4);
 };
 
