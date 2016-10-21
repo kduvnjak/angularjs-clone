@@ -1,6 +1,7 @@
 'use strict';
 
 var Scope = require('../src/scope');
+
 var _ = require('lodash');
 
 describe('Scope', function () {
@@ -1890,7 +1891,7 @@ describe('Scope', function () {
             expect(listener).toHaveBeenCalled();
         });
 
-        it('no longers calls listeners after destroyed', function() {
+        it('no longer calls listeners after destroyed', function() {
             var listener = jasmine.createSpy();
             scope.$on('myEvent', listener);
             scope.$destroy();
